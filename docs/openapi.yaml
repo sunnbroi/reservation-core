@@ -1,0 +1,157 @@
+openapi: 3.1.0
+info:
+  title: Reservation Core demo API
+  version: 0.1.0
+  description: Synthetic local demo. Booking identity is derived from a bearer token. Webhooks trigger provider lookup.
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: Check the database connection
+      responses:
+        '200':
+          description: Database connection available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, const: ok}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /bookings:
+    post:
+      summary: Reserve one unit of a slot
+      description: Identical retries return the same booking and HTTP 200. Keys are scoped to the authenticated customer. Reusing a key with a different slot returns 409.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, pattern: '^[A-Za-z0-9._:-]{8,128}$'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slot_id]
+              properties:
+                slot_id: {type: string, format: uuid}
+      responses:
+        '200': {$ref: '#/components/responses/Booking'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /bookings/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/BookingId'}
+    get:
+      summary: Get the authenticated customer's reservation
+      responses:
+        '200': {$ref: '#/components/responses/Booking'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /bookings/{id}/payment:
+    parameters:
+      - {$ref: '#/components/parameters/BookingId'}
+    post:
+      summary: Queue payment once for an unexpired owned reservation
+      description: Repeating the call returns the current state. The response may already be confirmed. Payment facts are obtained asynchronously from the provider.
+      responses:
+        '202': {$ref: '#/components/responses/Booking'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /webhooks/payments:
+    post:
+      security: []
+      summary: Verify the demo signature and reconcile with the provider
+      description: Signature is lowercase hex HMAC-SHA256 of timestamp + '.' + raw body. Timestamp must be within 300 seconds. Body payment amounts or status flags are not trusted. Duplicate callbacks are harmless.
+      parameters:
+        - in: header
+          name: X-Webhook-Timestamp
+          required: true
+          schema: {type: string, pattern: '^[0-9]+$'}
+        - in: header
+          name: X-Webhook-Signature
+          required: true
+          schema: {type: string, pattern: '^[a-f0-9]{64}$'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [booking_id]
+              properties:
+                booking_id: {type: string, format: uuid}
+      responses:
+        '200': {$ref: '#/components/responses/Booking'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  parameters:
+    BookingId:
+      in: path
+      name: id
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    Booking:
+      type: object
+      required: [id, slot_id, status, price_minor, currency, hold_expires_at, payment_id]
+      properties:
+        id: {type: string, format: uuid}
+        slot_id: {type: string, format: uuid}
+        status:
+          type: string
+          enum: [held, payment_pending, confirmed, expired, payment_failed, review_required]
+        price_minor: {type: integer, minimum: 1, maximum: 1000000000}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        hold_expires_at:
+          type: string
+          format: date-time
+          description: Unpaid hold deadline. Does not expire a reservation after payment starts.
+        payment_id: {type: [string, 'null']}
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error: {type: string}
+        message: {type: string}
+    Unavailable:
+      type: object
+      required: [error, request_id]
+      properties:
+        error: {type: string, const: service_unavailable}
+        request_id: {type: string, format: uuid}
+  responses:
+    Booking:
+      description: Current reservation state
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Booking'}
+    Error:
+      description: Authentication, validation, ownership or business-rule error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unavailable:
+      description: Database or external provider unavailable; retry with the same idempotency key
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Unavailable'}

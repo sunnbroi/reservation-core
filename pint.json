@@ -1,0 +1,5 @@
+{
+  "preset": "psr12",
+  "exclude": ["vendor"],
+  "rules": {"declare_strict_types": true}
+}

@@ -1,0 +1,41 @@
+x-app: &app
+  build: .
+  env_file: .env
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: reservation
+      POSTGRES_USER: reservation
+      POSTGRES_PASSWORD: reservation-local-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reservation -d reservation"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - reservation-db:/var/lib/postgresql/data
+  app:
+    <<: *app
+    ports:
+      - "127.0.0.1:8080:8080"
+    command: ["sh", "-c", "php bin/console migrate && php bin/console seed && exec php -S 0.0.0.0:8080 -t public public/index.php"]
+  worker:
+    <<: *app
+    depends_on:
+      app:
+        condition: service_started
+    command: ["sh", "-c", "php bin/console migrate && exec php bin/console worker"]
+  test:
+    <<: *app
+    profiles: ["test"]
+    environment:
+      TEST_DATABASE_DSN: "pgsql:host=postgres;port=5432;dbname=reservation"
+    command: ["composer", "check"]
+
+volumes:
+  reservation-db:

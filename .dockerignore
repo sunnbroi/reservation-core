@@ -1,0 +1,6 @@
+.git
+vendor
+.env
+.phpunit.cache
+.phpstan.cache
+var

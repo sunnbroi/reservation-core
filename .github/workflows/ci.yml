@@ -1,0 +1,34 @@
+name: checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: reservation_test
+          POSTGRES_USER: reservation
+          POSTGRES_PASSWORD: reservation-local-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U reservation -d reservation_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_DSN: "pgsql:host=127.0.0.1;port=5432;dbname=reservation_test"
+      DATABASE_USER: reservation
+      DATABASE_PASSWORD: reservation-local-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_pgsql, mbstring, dom, xml, xmlwriter
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer check
