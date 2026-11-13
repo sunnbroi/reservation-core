@@ -1,6 +1,6 @@
 # Verification
 
-The following checks were executed locally against PHP 8.4.27 and PostgreSQL 17.11. PostgreSQL was a real server, not an in-memory substitute.
+The local checks below ran against PHP 8.4.27 and PostgreSQL 17.11. The published project also passed GitHub Actions against PHP 8.4.27 and PostgreSQL 17.12. Both environments used a real PostgreSQL server.
 
 | Check | Result |
 |---|---|
@@ -14,7 +14,7 @@ The following checks were executed locally against PHP 8.4.27 and PostgreSQL 17.
 | External effects after retry and reconciliation | One synthetic payment; two accepted domain notifications; all three outbox messages processed |
 | OpenAPI and Compose YAML syntax | Parsed successfully |
 | Docker image build and Compose runtime | Not run: Docker was unavailable in the validation environment |
-| GitHub Actions run | Not run: the new repository has not been published |
+| GitHub Actions run | Passed: Composer validation, formatting, PHPStan and all 46 tests / 186 assertions. [Verified run](https://github.com/sunnbroi/reservation-core/actions/runs/43476468751) |
 
 ## What the tests establish
 
